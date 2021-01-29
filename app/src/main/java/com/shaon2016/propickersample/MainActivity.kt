@@ -29,7 +29,7 @@ class MainActivity : AppCompatActivity() {
         btnGallery.setOnClickListener {
             ProPicker.with(this)
                 .galleryOnly()
-                .multiSelection()
+                .compressImage()
                 .start { resultCode, data ->
                     if (resultCode == RESULT_OK && data != null) {
                         val list = ProPicker.getSelectedPickerDatas(data)
@@ -56,6 +56,7 @@ class MainActivity : AppCompatActivity() {
                     }
                 }
         }
+
         btnShowCameraOnlyCompress.setOnClickListener {
             ProPicker.with(this)
                 .cameraOnly()
