@@ -6,34 +6,35 @@
 
 package com.shaon2016.propicker.pro_image_picker.ui
 
-import android.content.BroadcastReceiver
+import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
 import android.content.res.Configuration
 import android.hardware.display.DisplayManager
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
+import android.os.Environment.DIRECTORY_DCIM
+import android.provider.MediaStore
 import android.util.DisplayMetrics
 import android.util.Log
-import android.util.Size
 import android.view.*
-import android.widget.ImageButton
 import android.widget.ImageView
 import android.widget.RelativeLayout
 import androidx.appcompat.app.AppCompatActivity
 import androidx.camera.core.*
-import androidx.camera.core.impl.PreviewConfig
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
-import androidx.lifecycle.Observer
 import androidx.lifecycle.lifecycleScope
 import com.shaon2016.propicker.R
 import com.shaon2016.propicker.pro_image_picker.ProviderHelper
 import com.shaon2016.propicker.util.FileUtil
-import kotlinx.android.synthetic.main.fragment_image_provider.*
 import kotlinx.coroutines.launch
+import java.io.File
+import java.text.SimpleDateFormat
+import java.util.*
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import kotlin.math.abs
@@ -85,7 +86,7 @@ internal class ImageProviderFragment : Fragment() {
     override fun onCreateView(
         inflater: LayoutInflater, container: ViewGroup?,
         savedInstanceState: Bundle?
-    ): View? {
+    ): View {
         return inflater.inflate(R.layout.fragment_image_provider, container, false)
     }
 
@@ -127,7 +128,23 @@ internal class ImageProviderFragment : Fragment() {
         val imageCapture = imageCapture ?: return
 
         // Create time-stamped output file to hold the image
-        val photoFile = FileUtil.getImageOutputDirectory(requireContext())
+        var photoFile: File? = null
+        var contentValues: ContentValues? = null
+        if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.P) {
+            photoFile = FileUtil.getImageOutputDirectory(requireContext())
+        } else {
+            contentValues = ContentValues().apply {
+                put(
+                    MediaStore.Images.Media.DISPLAY_NAME, SimpleDateFormat(
+                        "yyyy-MM-dd-HH-mm-ss-SSS",
+                        Locale.US
+                    ).format(System.currentTimeMillis())
+                )
+                put(MediaStore.Images.Media.MIME_TYPE, "image/png")
+                put(MediaStore.Images.Media.RELATIVE_PATH, DIRECTORY_DCIM)
+            }
+        }
+
 
         // Setup image capture metadata
         val metadata = ImageCapture.Metadata().apply {
@@ -135,10 +152,26 @@ internal class ImageProviderFragment : Fragment() {
             // Mirror image when using the front camera
             isReversedHorizontal = lensFacing == CameraSelector.LENS_FACING_FRONT
         }
+
         // Create output options object which contains file + metadata
-        val outputOptions = ImageCapture.OutputFileOptions.Builder(photoFile)
-            .setMetadata(metadata)
-            .build()
+        val outputOptions: ImageCapture.OutputFileOptions
+        if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.P) {
+            outputOptions = photoFile?.let {
+                ImageCapture.OutputFileOptions.Builder(it)
+                    .setMetadata(metadata)
+                    .build()
+            }!!
+        } else {
+            outputOptions = contentValues?.let {
+                ImageCapture.OutputFileOptions.Builder(
+                    requireContext().contentResolver, MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+                    it
+                )
+                    .setMetadata(metadata)
+                    .build()
+            }!!
+        }
+
 
         // Set up image capture listener, which is triggered after photo has
         // been taken
@@ -151,8 +184,11 @@ internal class ImageProviderFragment : Fragment() {
                 }
 
                 override fun onImageSaved(output: ImageCapture.OutputFileResults) {
-
-                    captureImageUri = Uri.fromFile(photoFile)
+                    if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.P) {
+                        captureImageUri = Uri.fromFile(photoFile)
+                    } else {
+                        captureImageUri = output.savedUri
+                    }
 
                     captureImageUri?.let {
                         lifecycleScope.launch {
@@ -170,7 +206,7 @@ internal class ImageProviderFragment : Fragment() {
     private fun setupCamera() {
         val cameraProviderFuture = ProcessCameraProvider.getInstance(requireContext())
 
-        cameraProviderFuture.addListener(Runnable {
+        cameraProviderFuture.addListener({
             // Used to bind the lifecycle of cameras to the lifecycle owner
             cameraProvider = cameraProviderFuture.get()
 
@@ -263,12 +299,12 @@ internal class ImageProviderFragment : Fragment() {
 
     /** Returns true if the device has an available back camera. False otherwise */
     private fun hasBackCamera(): Boolean {
-        return cameraProvider.hasCamera(CameraSelector.DEFAULT_BACK_CAMERA) ?: false
+        return cameraProvider.hasCamera(CameraSelector.DEFAULT_BACK_CAMERA)
     }
 
     /** Returns true if the device has an available front camera. False otherwise */
     private fun hasFrontCamera(): Boolean {
-        return cameraProvider.hasCamera(CameraSelector.DEFAULT_FRONT_CAMERA) ?: false
+        return cameraProvider.hasCamera(CameraSelector.DEFAULT_FRONT_CAMERA)
     }
 
     /** Enabled or disabled a button to switch cameras depending on the available cameras */
@@ -302,7 +338,7 @@ internal class ImageProviderFragment : Fragment() {
             }
         } else btnFlash?.visibility = View.GONE
 
-        camera.cameraInfo.torchState.observe(viewLifecycleOwner, Observer { torchState ->
+        camera.cameraInfo.torchState.observe(viewLifecycleOwner, { torchState ->
             if (torchState == TorchState.OFF) {
                 btnFlash?.setImageResource(R.drawable.ic_baseline_flash_on_24)
             } else {
