@@ -83,10 +83,10 @@ class ProviderHelper(private val activity: AppCompatActivity) {
             )
 
             val name = file.name
-            if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.P) {
-                file = File(FileUriUtils.getRealPath(activity.baseContext, uri).toString())
+            file = if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.P) {
+                File(FileUriUtils.getRealPath(activity.baseContext, uri).toString())
             } else {
-                file = File(
+                File(
                     FileUriUtils.copyFileToInternalStorage(uri, "", activity.baseContext).toString()
                 )
             }
@@ -217,7 +217,7 @@ class ProviderHelper(private val activity: AppCompatActivity) {
 
         } else if (resultCode == UCrop.RESULT_ERROR) {
             val cropError = UCrop.getError(data!!)
-            Log.e("CropError", "Cropping failed: " + cropError)
+            Log.e("CropError", "Cropping failed: $cropError")
             setResultAndFinish(null)
         }
     }

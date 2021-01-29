@@ -22,13 +22,7 @@ import java.text.SimpleDateFormat
 import java.util.*
 
 
-/**
- * File Utility Methods
- *
- * @author Dhaval Patel
- * @version 1.0
- * @since 04 January 2019
- */
+
 object FileUtil {
     private val FILENAME_FORMAT = "yyyy-MM-dd-HH-mm-ss-SSS"
 
